@@ -1,0 +1,6 @@
+^XA
+^CI28
+^PW240
+^LL1439
+^FO231,0^A0R,223,223^FH\^FDLa\C3\A7o de teste^FS
+^XZ

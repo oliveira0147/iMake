@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IMake - Editor de Etiquetas (ZPL)</title>
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">IMake</div>
+      <div class="topbar-right">
+        <span id="meLabel" class="muted"></span>
+        <button id="logoutBtn" class="btn btn-secondary hidden">Sair</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section id="authView" class="card">
+        <h2>Entrar</h2>
+        <form id="loginForm" class="form">
+          <label>
+            E-mail
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Senha
+            <input name="password" type="password" autocomplete="current-password" required minlength="6" />
+          </label>
+          <button class="btn btn-primary" type="submit">Entrar</button>
+          <div id="loginMsg" class="msg"></div>
+        </form>
+
+        <hr />
+
+        <h2>Criar conta</h2>
+        <form id="registerForm" class="form">
+          <label>
+            E-mail
+            <input name="email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Senha
+            <input name="password" type="password" autocomplete="new-password" required minlength="6" />
+          </label>
+          <label>
+            Loja (ID)
+            <input name="storeId" type="text" value="loja-1" required />
+          </label>
+          <button class="btn btn-primary" type="submit">Cadastrar</button>
+          <div id="registerMsg" class="msg"></div>
+        </form>
+      </section>
+
+      <section id="appView" class="hidden">
+        <div class="grid">
+          <aside class="card">
+            <div class="row row-between row-gap">
+              <h2>Modelos</h2>
+              <button id="newTemplateBtn" class="btn btn-primary">Novo</button>
+            </div>
+            <div class="row row-gap">
+              <input id="searchInput" type="text" placeholder="Buscar..." />
+              <button id="reloadTemplatesBtn" class="btn btn-secondary">Recarregar</button>
+            </div>
+            <div id="templatesList" class="list"></div>
+
+            <div id="adminPanel" class="hidden">
+              <hr />
+              <h3>Admin</h3>
+              <div class="row row-gap">
+                <button id="reloadPendingBtn" class="btn btn-secondary">Pendências</button>
+              </div>
+              <div id="pendingList" class="list"></div>
+            </div>
+          </aside>
+
+          <section class="card">
+            <div class="row row-between row-gap">
+              <div class="row row-gap">
+                <h2 id="editorTitle">Editor</h2>
+                <span id="editorMeta" class="muted"></span>
+              </div>
+              <div class="row row-gap">
+                <button id="saveBtn" class="btn btn-primary" disabled>Salvar</button>
+                <a id="exportBtn" class="btn btn-secondary disabled" href="#" download>Baixar ZPL</a>
+              </div>
+            </div>
+
+            <div class="row row-gap">
+              <label class="inline">
+                Largura (mm)
+                <input id="labelWidthMm" type="number" min="5" step="0.1" value="50" />
+              </label>
+              <label class="inline">
+                Altura (mm)
+                <input id="labelHeightMm" type="number" min="5" step="0.1" value="30" />
+              </label>
+              <label class="inline">
+                Offset X (mm)
+                <input id="labelOffsetXMm" type="number" step="0.1" value="0" />
+              </label>
+              <label class="inline">
+                Offset Y (mm)
+                <input id="labelOffsetYMm" type="number" step="0.1" value="0" />
+              </label>
+              <label class="inline">
+                Zoom
+                <input id="zoom" type="number" min="0.25" step="0.25" value="1" />
+              </label>
+            </div>
+
+            <div class="row row-gap">
+              <button id="addTextBtn" class="btn btn-secondary" disabled>Texto</button>
+              <button id="addBoxBtn" class="btn btn-secondary" disabled>Caixa</button>
+              <button id="addQrBtn" class="btn btn-secondary" disabled>QR</button>
+              <button id="requestPublishBtn" class="btn btn-secondary hidden">Solicitar publicação</button>
+            </div>
+
+            <div class="editor">
+              <div class="canvas-wrap">
+                <canvas id="canvas" width="600" height="360"></canvas>
+              </div>
+              <div class="props">
+                <h3>Propriedades</h3>
+                <div id="propsEmpty" class="muted">Selecione um objeto</div>
+                <form id="propsForm" class="form hidden"></form>
+                <div class="row row-gap">
+                  <button id="deleteObjBtn" class="btn btn-secondary" disabled>Excluir</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
