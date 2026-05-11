@@ -26,14 +26,36 @@ import { generateZplForTemplate } from "./src/zpl.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const runtimeLogPath = path.join(__dirname, "runtime.log");
+
+function writeLog(line) {
+  const text = line.endsWith("\n") ? line : `${line}\n`;
+  try {
+    process.stdout.write(text);
+  } catch {}
+  try {
+    fs.appendFileSync(runtimeLogPath, text, { encoding: "utf8" });
+  } catch {}
+}
+
+function writeErrorLog(line) {
+  const text = line.endsWith("\n") ? line : `${line}\n`;
+  try {
+    process.stderr.write(text);
+  } catch {}
+  try {
+    fs.appendFileSync(runtimeLogPath, text, { encoding: "utf8" });
+  } catch {}
+}
+
 process.on("unhandledRejection", (reason) => {
-  process.stderr.write(
+  writeErrorLog(
     `[${new Date().toISOString()}] unhandledRejection\n${reason?.stack || String(reason)}\n`
   );
 });
 
 process.on("uncaughtException", (err) => {
-  process.stderr.write(`[${new Date().toISOString()}] uncaughtException\n${err?.stack || err}\n`);
+  writeErrorLog(`[${new Date().toISOString()}] uncaughtException\n${err?.stack || err}\n`);
   process.exitCode = 1;
 });
 
@@ -92,7 +114,7 @@ app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on("finish", () => {
     const ms = Date.now() - startedAt;
-    process.stdout.write(
+    writeLog(
       `[${new Date().toISOString()}] req ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms\n`
     );
   });
@@ -311,11 +333,12 @@ function sanitizeFilename(name) {
     .replace(/\s+/g, "_") || "modelo";
 }
 
-const port = Number(process.env.PORT ?? 3000);
+const port = Number.parseInt(String(process.env.PORT ?? ""), 10) || 3000;
+const host = String(process.env.HOST ?? "0.0.0.0") || "0.0.0.0";
 {
   const db = getDbDebugInfo();
-  process.stdout.write(
-    `[${new Date().toISOString()}] startup node=${process.version} env=${process.env.NODE_ENV || ""} port=${port} dist=${hasFrontendBuild ? "yes" : "no"} dbSource=${db.source} dbHost=${db.host} dbPort=${db.port} dbUser=${db.user} dbName=${db.database}\n`
+  writeLog(
+    `[${new Date().toISOString()}] startup node=${process.version} env=${process.env.NODE_ENV || ""} host=${host} port=${port} dist=${hasFrontendBuild ? "yes" : "no"} dbSource=${db.source} dbHost=${db.host} dbPort=${db.port} dbUser=${db.user} dbName=${db.database}\n`
   );
 }
 if (hasFrontendBuild) {
@@ -328,7 +351,7 @@ if (hasFrontendBuild) {
 
 app.use((err, req, res, _next) => {
   const requestId = nanoid(10);
-  process.stderr.write(
+  writeErrorLog(
     `[${new Date().toISOString()}] error requestId=${requestId} ${req.method} ${req.originalUrl}\n${err?.stack || err}\n`
   );
   if (req.path.startsWith("/api/")) {
@@ -338,6 +361,6 @@ app.use((err, req, res, _next) => {
   res.status(500).send("Erro interno");
 });
 
-app.listen(port, "0.0.0.0", () => {
-  process.stdout.write(`Listening on port ${port}\n`);
+app.listen(port, host, () => {
+  writeLog(`Listening on host=${host} port=${port}\n`);
 });
