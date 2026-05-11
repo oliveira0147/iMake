@@ -314,6 +314,12 @@ export async function publishTemplate(id) {
   return updateTemplate(id, { visibility: "public", publishStatus: "approved" });
 }
 
+export async function deleteTemplate(id) {
+  const pool = await getPool();
+  const [result] = await pool.execute("DELETE FROM templates WHERE id = ?", [id]);
+  return Number(result?.affectedRows ?? 0) > 0;
+}
+
 function parseJson(value, fallback) {
   if (value == null) return fallback;
   if (typeof value === "object") return value;

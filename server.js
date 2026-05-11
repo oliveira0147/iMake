@@ -17,6 +17,7 @@ import {
   requestPublishTemplate,
   listPendingPublishTemplates,
   publishTemplate,
+  deleteTemplate,
 } from "./src/storage.js";
 import { createToken, requireAuth, requireAdmin } from "./src/auth.js";
 import { generateZplForTemplate } from "./src/zpl.js";
@@ -27,6 +28,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
 
+function clamp(n, min, max) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function parseMm(value, fallback) {
+  const n = Number(String(value ?? "").trim().replace(",", "."));
+  if (!Number.isFinite(n)) return fallback;
+  return clamp(n, 5, 2000);
+}
+
 if (isProd) {
   app.set("trust proxy", 1);
 }
@@ -34,7 +45,16 @@ if (isProd) {
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    index: false,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".webmanifest")) {
+        res.setHeader("Content-Type", "application/manifest+json; charset=utf-8");
+      }
+    },
+  })
+);
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
@@ -132,8 +152,8 @@ app.get("/api/templates", requireAuth, async (req, res) => {
 app.post("/api/templates", requireAuth, async (req, res) => {
   const name = String(req.body?.name ?? "").trim() || "Novo modelo";
   const label = req.body?.label ?? {};
-  const widthMm = Number(label.widthMm ?? 50);
-  const heightMm = Number(label.heightMm ?? 30);
+  const widthMm = parseMm(label.widthMm, 50);
+  const heightMm = parseMm(label.heightMm, 30);
   const dpi = 203;
   const objects = Array.isArray(req.body?.objects) ? req.body.objects : [];
 
@@ -167,8 +187,8 @@ app.put("/api/templates/:id", requireAuth, async (req, res) => {
 
   const name = String(req.body?.name ?? tpl.name).trim() || tpl.name;
   const label = req.body?.label ?? tpl.label;
-  const widthMm = Number(label.widthMm ?? tpl.label.widthMm);
-  const heightMm = Number(label.heightMm ?? tpl.label.heightMm);
+  const widthMm = parseMm(label.widthMm, tpl.label.widthMm);
+  const heightMm = parseMm(label.heightMm, tpl.label.heightMm);
   const dpi = 203;
   const objects = Array.isArray(req.body?.objects) ? req.body.objects : tpl.objects;
 
@@ -178,6 +198,16 @@ app.put("/api/templates/:id", requireAuth, async (req, res) => {
     objects,
   });
   res.json({ template: updated });
+});
+
+app.delete("/api/templates/:id", requireAuth, async (req, res) => {
+  const tpl = await getTemplateById(req.params.id);
+  if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
+  if (tpl.ownerId !== req.user.id && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Sem permissão" });
+  }
+  const ok = await deleteTemplate(req.params.id);
+  res.json({ ok });
 });
 
 app.post("/api/templates/:id/request-publish", requireAuth, async (req, res) => {
@@ -228,6 +258,15 @@ function sanitizeFilename(name) {
 }
 
 const port = Number(process.env.PORT ?? 3000);
+if (isProd) {
+  const distDir = path.join(__dirname, "frontend", "dist");
+  app.use(express.static(distDir, { index: false }));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+}
+
 app.listen(port, () => {
   process.stdout.write(`http://localhost:${port}\n`);
 });

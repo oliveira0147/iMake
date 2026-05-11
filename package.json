@@ -8,7 +8,12 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "concurrently -k \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "node server.js",
+    "dev:web": "vite --config frontend/vite.config.js",
+    "build": "vite build --config frontend/vite.config.js",
+    "agent": "node print-agent.js",
+    "build:agent": "node tools/build-agent-icon.cjs && node -e \"import('node:fs').then(fs=>{fs.mkdirSync('build',{recursive:true});fs.mkdirSync('release',{recursive:true});})\" && node node_modules/esbuild/bin/esbuild print-agent.js --bundle --platform=node --format=cjs --outfile=build/print-agent.cjs && node node_modules/pkg/lib-es5/bin.js build/print-agent.cjs --targets node18-win-x64 --output release/IMakePrintAgent.exe"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
@@ -17,6 +22,17 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.1",
-    "nanoid": "^5.1.5"
+    "nanoid": "^5.1.5",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^5.0.2",
+    "concurrently": "^9.2.1",
+    "esbuild": "^0.25.5",
+    "png-to-ico": "^2.1.8",
+    "pkg": "^5.8.1",
+    "sharp": "^0.34.3",
+    "vite": "^7.0.0"
   }
 }

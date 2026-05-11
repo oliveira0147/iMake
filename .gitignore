@@ -11,4 +11,5 @@ Thumbs.db
 
 dist/
 build/
+release/
 coverage/

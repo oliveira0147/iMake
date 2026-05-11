@@ -36,6 +36,59 @@ body {
   padding: 16px;
 }
 
+.auth-card {
+  max-width: 440px;
+  width: 100%;
+  margin: 32px auto;
+}
+
+.auth-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.auth-title {
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.auth-subtitle {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #f3f4f6;
+}
+
+.auth-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-weight: 600;
+  color: #374151;
+}
+
+.auth-tab.active {
+  background: #fff;
+  border-color: #e5e7eb;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.auth-pane {
+  margin-top: 12px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -94,6 +147,33 @@ hr {
 
 .hidden {
   display: none !important;
+}
+
+.modal-open {
+  overflow: hidden;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  z-index: 50;
+}
+
+.modal {
+  max-width: 520px;
+  width: 100%;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 .form {
@@ -168,6 +248,11 @@ select:focus {
   background: #f9fafb;
   border-color: #d1d5db;
   color: #111827;
+}
+
+.btn-danger {
+  background: #b91c1c;
+  color: #fff;
 }
 
 .list {

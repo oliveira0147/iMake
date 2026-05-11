@@ -8,6 +8,10 @@ const el = {
   loginMsg: document.querySelector("#loginMsg"),
   registerForm: document.querySelector("#registerForm"),
   registerMsg: document.querySelector("#registerMsg"),
+  authTabLogin: document.querySelector("#authTabLogin"),
+  authTabRegister: document.querySelector("#authTabRegister"),
+  loginPane: document.querySelector("#loginPane"),
+  registerPane: document.querySelector("#registerPane"),
 
   templatesList: document.querySelector("#templatesList"),
   reloadTemplatesBtn: document.querySelector("#reloadTemplatesBtn"),
@@ -22,7 +26,10 @@ const el = {
   editorMeta: document.querySelector("#editorMeta"),
   saveBtn: document.querySelector("#saveBtn"),
   exportBtn: document.querySelector("#exportBtn"),
+  printBtn: document.querySelector("#printBtn"),
   requestPublishBtn: document.querySelector("#requestPublishBtn"),
+  renameTemplateBtn: document.querySelector("#renameTemplateBtn"),
+  deleteTemplateBtn: document.querySelector("#deleteTemplateBtn"),
 
   labelWidthMm: document.querySelector("#labelWidthMm"),
   labelHeightMm: document.querySelector("#labelHeightMm"),
@@ -62,6 +69,12 @@ function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
+function parseLocaleNumber(value) {
+  const raw = String(value ?? "").trim().replace(",", ".");
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 async function api(path, { method = "GET", body } = {}) {
   const res = await fetch(path, {
     method,
@@ -87,14 +100,280 @@ function safeJson(text) {
   }
 }
 
+function setAuthTab(mode) {
+  const isLogin = mode === "login";
+  el.authTabLogin?.classList.toggle("active", isLogin);
+  el.authTabRegister?.classList.toggle("active", !isLogin);
+  el.loginPane?.classList.toggle("hidden", !isLogin);
+  el.registerPane?.classList.toggle("hidden", isLogin);
+  el.authTabLogin?.setAttribute("aria-selected", String(isLogin));
+  el.authTabRegister?.setAttribute("aria-selected", String(!isLogin));
+  setMessage(el.loginMsg, "");
+  setMessage(el.registerMsg, "");
+}
+
 function setAuthMode(isAuthed) {
   el.authView.classList.toggle("hidden", isAuthed);
   el.appView.classList.toggle("hidden", !isAuthed);
   el.logoutBtn.classList.toggle("hidden", !isAuthed);
+  if (!isAuthed) setAuthTab("login");
 }
 
 function setMessage(target, msg) {
   target.textContent = msg || "";
+}
+
+let newTemplateModal = null;
+let newTemplateModalResolver = null;
+
+function closeNewTemplateModal(result) {
+  if (!newTemplateModal) return;
+  newTemplateModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  const resolve = newTemplateModalResolver;
+  newTemplateModalResolver = null;
+  if (resolve) resolve(result ?? null);
+}
+
+function ensureNewTemplateModal() {
+  if (newTemplateModal) return;
+  const backdrop = document.createElement("div");
+  backdrop.id = "newTemplateModal";
+  backdrop.className = "modal-backdrop hidden";
+  backdrop.innerHTML = `
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="newTemplateTitle">
+      <h2 id="newTemplateTitle">Novo modelo</h2>
+      <form id="newTemplateForm" class="form">
+        <label>
+          Nome
+          <input name="name" type="text" required maxlength="255" />
+        </label>
+        <div class="row row-gap">
+          <label class="inline">
+            Largura (mm)
+            <input name="widthMm" type="number" min="5" step="0.1" required />
+          </label>
+          <label class="inline">
+            Altura (mm)
+            <input name="heightMm" type="number" min="5" step="0.1" required />
+          </label>
+        </div>
+        <div id="newTemplateMsg" class="msg"></div>
+        <div class="modal-actions">
+          <button id="newTemplateCancelBtn" class="btn btn-secondary" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Criar</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  newTemplateModal = backdrop;
+
+  const form = backdrop.querySelector("#newTemplateForm");
+  const cancelBtn = backdrop.querySelector("#newTemplateCancelBtn");
+  const msg = backdrop.querySelector("#newTemplateMsg");
+
+  backdrop.addEventListener("click", (evt) => {
+    if (evt.target === backdrop) closeNewTemplateModal(null);
+  });
+  cancelBtn.addEventListener("click", () => closeNewTemplateModal(null));
+  window.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && !newTemplateModal.classList.contains("hidden")) {
+      closeNewTemplateModal(null);
+    }
+  });
+
+  form.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    msg.textContent = "";
+    const fd = new FormData(form);
+    const name = String(fd.get("name") ?? "").trim();
+    const widthMm = parseLocaleNumber(fd.get("widthMm"));
+    const heightMm = parseLocaleNumber(fd.get("heightMm"));
+    if (!name) {
+      msg.textContent = "Informe um nome";
+      return;
+    }
+    if (!Number.isFinite(widthMm) || widthMm < 5 || !Number.isFinite(heightMm) || heightMm < 5) {
+      msg.textContent = "Dimensões inválidas";
+      return;
+    }
+    closeNewTemplateModal({ name, widthMm, heightMm });
+  });
+}
+
+function openNewTemplateModal() {
+  ensureNewTemplateModal();
+  const form = newTemplateModal.querySelector("#newTemplateForm");
+  const msg = newTemplateModal.querySelector("#newTemplateMsg");
+  msg.textContent = "";
+
+  const nameInput = form.querySelector('input[name="name"]');
+  const widthInput = form.querySelector('input[name="widthMm"]');
+  const heightInput = form.querySelector('input[name="heightMm"]');
+
+  widthInput.value = String(parseLocaleNumber(el.labelWidthMm?.value) ?? 50);
+  heightInput.value = String(parseLocaleNumber(el.labelHeightMm?.value) ?? 30);
+  nameInput.value = "Novo modelo";
+
+  newTemplateModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  setTimeout(() => nameInput.focus(), 0);
+
+  return new Promise((resolve) => {
+    newTemplateModalResolver = resolve;
+  });
+}
+
+let printModal = null;
+let printModalResolver = null;
+
+function closePrintModal(result) {
+  if (!printModal) return;
+  printModal.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+  const resolve = printModalResolver;
+  printModalResolver = null;
+  if (resolve) resolve(result ?? null);
+}
+
+function ensurePrintModal() {
+  if (printModal) return;
+  const backdrop = document.createElement("div");
+  backdrop.id = "printModal";
+  backdrop.className = "modal-backdrop hidden";
+  backdrop.innerHTML = `
+    <div class="card modal" role="dialog" aria-modal="true" aria-labelledby="printTitle">
+      <h2 id="printTitle">Imprimir laços</h2>
+      <form id="printForm" class="form">
+        <label>
+          IP/Host da impressora
+          <input name="host" type="text" required placeholder="192.168.0.50" />
+        </label>
+        <div class="row row-gap">
+          <label class="inline">
+            Porta
+            <input name="port" type="number" min="1" max="65535" step="1" required />
+          </label>
+          <label class="inline">
+            Quantidade
+            <input name="qty" type="number" min="1" max="10000" step="1" required />
+          </label>
+          <label class="inline">
+            Mídia contínua
+            <input name="continuous" type="checkbox" />
+          </label>
+        </div>
+        <div class="muted">
+          O tamanho do laço é a Altura (mm) definida no modelo.
+        </div>
+        <div id="printMsg" class="msg"></div>
+        <div class="modal-actions">
+          <button id="printCancelBtn" class="btn btn-secondary" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Imprimir</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(backdrop);
+  printModal = backdrop;
+
+  const form = backdrop.querySelector("#printForm");
+  const cancelBtn = backdrop.querySelector("#printCancelBtn");
+  const msg = backdrop.querySelector("#printMsg");
+
+  backdrop.addEventListener("click", (evt) => {
+    if (evt.target === backdrop) closePrintModal(null);
+  });
+  cancelBtn.addEventListener("click", () => closePrintModal(null));
+  window.addEventListener("keydown", (evt) => {
+    if (evt.key === "Escape" && !printModal.classList.contains("hidden")) {
+      closePrintModal(null);
+    }
+  });
+
+  form.addEventListener("submit", (evt) => {
+    evt.preventDefault();
+    msg.textContent = "";
+    const fd = new FormData(form);
+    const host = String(fd.get("host") ?? "").trim();
+    const port = Number(fd.get("port") ?? 9100);
+    const qty = Number(fd.get("qty") ?? 1);
+    const continuous = Boolean(fd.get("continuous"));
+
+    if (!host) {
+      msg.textContent = "Informe o IP/Host";
+      return;
+    }
+    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+      msg.textContent = "Porta inválida";
+      return;
+    }
+    if (!Number.isFinite(qty) || qty < 1 || qty > 10000) {
+      msg.textContent = "Quantidade inválida";
+      return;
+    }
+
+    localStorage.setItem("imake_printer_host", host);
+    localStorage.setItem("imake_printer_port", String(port));
+    localStorage.setItem("imake_print_qty", String(qty));
+    localStorage.setItem("imake_print_continuous", continuous ? "1" : "0");
+
+    closePrintModal({ host, port, qty, continuous });
+  });
+}
+
+function openPrintModal() {
+  ensurePrintModal();
+  const form = printModal.querySelector("#printForm");
+  const msg = printModal.querySelector("#printMsg");
+  msg.textContent = "";
+
+  const hostInput = form.querySelector('input[name="host"]');
+  const portInput = form.querySelector('input[name="port"]');
+  const qtyInput = form.querySelector('input[name="qty"]');
+  const continuousInput = form.querySelector('input[name="continuous"]');
+
+  const savedHost = localStorage.getItem("imake_printer_host") || "";
+  const savedPort = Number(localStorage.getItem("imake_printer_port") || 9100) || 9100;
+  const savedQty = Number(localStorage.getItem("imake_print_qty") || 1) || 1;
+  const savedContinuous = (localStorage.getItem("imake_print_continuous") || "1") === "1";
+
+  hostInput.value = savedHost;
+  portInput.value = String(savedPort);
+  qtyInput.value = String(savedQty);
+  continuousInput.checked = savedContinuous;
+
+  printModal.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+  setTimeout(() => hostInput.focus(), 0);
+
+  return new Promise((resolve) => {
+    printModalResolver = resolve;
+  });
+}
+
+async function ensureLocalPrintAgent() {
+  const agentUrl = String(localStorage.getItem("imake_print_agent_url") || "http://localhost:8787").replace(/\/+$/, "");
+  const res = await fetch(`${agentUrl}/health`, { method: "GET" });
+  if (!res.ok) {
+    throw new Error("Agente de impressão não respondeu. Inicie o print-agent no computador do cliente.");
+  }
+  return agentUrl;
+}
+
+async function printZplToHost({ host, port, zpl }) {
+  const agentUrl = await ensureLocalPrintAgent();
+  const res = await fetch(`${agentUrl}/print`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ host, port, zpl }),
+  });
+  const text = await res.text();
+  const data = text ? safeJson(text) : null;
+  if (!res.ok) {
+    throw new Error(data?.error || `Falha ao imprimir (${res.status})`);
+  }
 }
 
 function renderMe() {
@@ -126,6 +405,9 @@ function enableEditor(isEnabled) {
   el.addQrBtn.disabled = !isEnabled;
   el.deleteObjBtn.disabled = !isEnabled;
   el.exportBtn.classList.toggle("disabled", !isEnabled);
+  if (el.printBtn) el.printBtn.disabled = !isEnabled;
+  el.renameTemplateBtn.disabled = !isEnabled;
+  el.deleteTemplateBtn.disabled = !isEnabled;
 }
 
 function renderTemplates() {
@@ -191,6 +473,25 @@ async function openTemplate(id) {
   draw();
 }
 
+function clearCurrentTemplate() {
+  state.current = null;
+  state.selectedId = null;
+  el.editorTitle.textContent = "Editor";
+  el.editorMeta.textContent = "";
+  el.requestPublishBtn.classList.add("hidden");
+  enableEditor(false);
+  updateExportLink();
+  renderProperties();
+  resizeCanvasToDefault();
+}
+
+function updateTemplateInState(nextTemplate) {
+  const idx = state.templates.findIndex((t) => t.id === nextTemplate.id);
+  if (idx >= 0) {
+    state.templates[idx] = { ...state.templates[idx], ...nextTemplate };
+  }
+}
+
 function renderCurrentHeader() {
   const t = state.current;
   if (!t) return;
@@ -214,14 +515,15 @@ function syncLabelInputsFromCurrent() {
 
 function syncCurrentFromLabelInputs() {
   if (!state.current) return;
-  const widthMm = Number(el.labelWidthMm.value);
-  const heightMm = Number(el.labelHeightMm.value);
-  const offsetXMm = Number(el.labelOffsetXMm.value || 0);
-  const offsetYMm = Number(el.labelOffsetYMm.value || 0);
+  const maxMm = 2000;
+  const widthMm = parseLocaleNumber(el.labelWidthMm.value);
+  const heightMm = parseLocaleNumber(el.labelHeightMm.value);
+  const offsetXMm = parseLocaleNumber(el.labelOffsetXMm.value) ?? 0;
+  const offsetYMm = parseLocaleNumber(el.labelOffsetYMm.value) ?? 0;
   state.zoom = clamp(Number(el.zoom.value || 1), 0.1, 8);
   state.current.label = {
-    widthMm: clamp(widthMm, 5, 300),
-    heightMm: clamp(heightMm, 5, 300),
+    widthMm: clamp(widthMm ?? 50, 5, maxMm),
+    heightMm: clamp(heightMm ?? 30, 5, maxMm),
     dpi: 203,
     offsetXMm: clamp(offsetXMm, -50, 50),
     offsetYMm: clamp(offsetYMm, -50, 50),
@@ -275,7 +577,7 @@ function zplJustification(align) {
   return "L";
 }
 
-function generateZplForTemplateDraft(template) {
+function generateZplForTemplateDraft(template, { quantity = 1, continuous = false } = {}) {
   const dpi = 203;
   const widthDots = zplMmToDots(template.label?.widthMm ?? 50, dpi);
   const heightDots = zplMmToDots(template.label?.heightMm ?? 30, dpi);
@@ -285,6 +587,9 @@ function generateZplForTemplateDraft(template) {
   const lines = [];
   lines.push("^XA");
   lines.push("^CI28");
+  if (continuous) {
+    lines.push("^MNN");
+  }
   lines.push(`^PW${widthDots}`);
   lines.push(`^LL${heightDots}`);
   if (offsetXDots !== 0 || offsetYDots !== 0) {
@@ -362,6 +667,10 @@ function generateZplForTemplateDraft(template) {
     }
   }
 
+  const qty = Math.max(1, Math.min(10000, Number(quantity) || 1));
+  if (qty > 1) {
+    lines.push(`^PQ${qty}`);
+  }
   lines.push("^XZ");
   return lines.join("\n");
 }
@@ -968,10 +1277,11 @@ async function saveCurrent() {
 }
 
 async function createNewTemplate() {
-  const name = prompt("Nome do modelo", "Novo modelo");
-  if (!name) return;
-  const widthMm = Number(el.labelWidthMm.value || 50);
-  const heightMm = Number(el.labelHeightMm.value || 30);
+  const data = await openNewTemplateModal();
+  if (!data) return;
+  const name = data.name;
+  const widthMm = data.widthMm;
+  const heightMm = data.heightMm;
   const { template } = await api("/api/templates", {
     method: "POST",
     body: {
@@ -1155,6 +1465,24 @@ el.exportBtn.addEventListener("click", (evt) => {
   downloadTextFile(zpl, `${sanitizeFilename(state.current.name)}.zpl`);
 });
 
+el.printBtn?.addEventListener("click", async () => {
+  if (!state.current) return;
+  try {
+    const opts = await openPrintModal();
+    if (!opts) return;
+    syncCurrentFromLabelInputs();
+    const zpl = generateZplForTemplateDraft(state.current, { quantity: opts.qty, continuous: opts.continuous });
+    await printZplToHost({
+      host: opts.host,
+      port: opts.port,
+      zpl,
+    });
+  } catch (e) {
+    const msg = String(e?.message || e || "Falha ao imprimir");
+    alert(msg);
+  }
+});
+
 el.saveBtn.addEventListener("click", async () => {
   try {
     await saveCurrent();
@@ -1241,15 +1569,52 @@ el.logoutBtn.addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
   } finally {
     state.me = null;
-    state.current = null;
     state.templates = [];
-    enableEditor(false);
+    clearCurrentTemplate();
     setAuthMode(false);
     renderMe();
     el.templatesList.innerHTML = "";
     draw();
   }
 });
+
+el.renameTemplateBtn.addEventListener("click", async () => {
+  if (!state.current?.id) return;
+  const currentName = String(state.current.name || "").trim();
+  const newName = String(prompt("Novo nome do modelo:", currentName) ?? "").trim();
+  if (!newName || newName === currentName) return;
+  try {
+    const { template } = await api(`/api/templates/${encodeURIComponent(state.current.id)}`, {
+      method: "PUT",
+      body: { name: newName },
+    });
+    state.current = template;
+    updateTemplateInState(template);
+    renderCurrentHeader();
+    updateExportLink();
+    renderTemplates();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+el.deleteTemplateBtn.addEventListener("click", async () => {
+  if (!state.current?.id) return;
+  const name = String(state.current.name || "modelo");
+  const ok = confirm(`Excluir o modelo "${name}"? Essa ação não pode ser desfeita.`);
+  if (!ok) return;
+  try {
+    await api(`/api/templates/${encodeURIComponent(state.current.id)}`, { method: "DELETE" });
+    state.templates = state.templates.filter((t) => t.id !== state.current.id);
+    renderTemplates();
+    clearCurrentTemplate();
+  } catch (e) {
+    alert(e.message);
+  }
+});
+
+el.authTabLogin?.addEventListener("click", () => setAuthTab("login"));
+el.authTabRegister?.addEventListener("click", () => setAuthTab("register"));
 
 el.loginForm.addEventListener("submit", async (evt) => {
   evt.preventDefault();
@@ -1275,10 +1640,16 @@ el.registerForm.addEventListener("submit", async (evt) => {
   evt.preventDefault();
   setMessage(el.registerMsg, "");
   const fd = new FormData(el.registerForm);
+  const password = String(fd.get("password") ?? "");
+  const password2 = String(fd.get("password2") ?? "");
+  if (password !== password2) {
+    setMessage(el.registerMsg, "As senhas não conferem");
+    return;
+  }
   try {
     const { user } = await api("/api/auth/register", {
       method: "POST",
-      body: { email: fd.get("email"), password: fd.get("password"), storeId: fd.get("storeId") },
+      body: { email: fd.get("email"), password, storeId: fd.get("storeId") },
     });
     state.me = user;
     renderMe();
@@ -1297,8 +1668,15 @@ function resizeCanvasToDefault() {
   draw();
 }
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
+
 enableEditor(false);
 resizeCanvasToDefault();
+setAuthTab("login");
 await refreshMe();
 if (state.me) {
   await loadTemplates();
