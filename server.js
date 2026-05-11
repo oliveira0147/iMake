@@ -267,6 +267,6 @@ if (isProd) {
   });
 }
 
-app.listen(port, () => {
-  process.stdout.write(`http://localhost:${port}\n`);
+app.listen(port, "0.0.0.0", () => {
+  process.stdout.write(`Listening on port ${port}\n`);
 });
