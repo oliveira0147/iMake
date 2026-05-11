@@ -2,16 +2,16 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 const DEFAULT_DEV_SECRET = "dev-secret-change-me";
-const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_DEV_SECRET;
+const isProd = process.env.NODE_ENV === "production";
+const JWT_SECRET = process.env.JWT_SECRET || (isProd ? "" : DEFAULT_DEV_SECRET);
 const JWT_ISSUER = "imake";
 
-export function assertAuthConfig() {
-  if (process.env.NODE_ENV === "production" && JWT_SECRET === DEFAULT_DEV_SECRET) {
-    throw new Error("JWT_SECRET não configurado para produção");
-  }
-}
+const AUTH_DISABLED = isProd && !JWT_SECRET;
 
 export function createToken(user) {
+  if (AUTH_DISABLED) {
+    throw new Error("JWT_SECRET não configurado para produção");
+  }
   return jwt.sign(
     { sub: user.id, role: user.role, email: user.email, storeId: user.storeId },
     JWT_SECRET,
@@ -20,6 +20,7 @@ export function createToken(user) {
 }
 
 export function requireAuth(req, res, next) {
+  if (AUTH_DISABLED) return res.status(503).json({ error: "Autenticação não configurada" });
   const token = req.cookies?.token;
   if (!token) return res.status(401).json({ error: "Não autenticado" });
   try {

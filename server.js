@@ -20,7 +20,7 @@ import {
   publishTemplate,
   deleteTemplate,
 } from "./src/storage.js";
-import { assertAuthConfig, createToken, requireAuth, requireAdmin } from "./src/auth.js";
+import { createToken, requireAuth, requireAdmin } from "./src/auth.js";
 import { generateZplForTemplate } from "./src/zpl.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,11 +42,29 @@ const isProd = process.env.NODE_ENV === "production";
 const distDir = path.join(__dirname, "frontend", "dist");
 const hasFrontendBuild = fs.existsSync(path.join(distDir, "index.html"));
 
-try {
-  assertAuthConfig();
-} catch (err) {
-  process.stderr.write(`[${new Date().toISOString()}] startupError\n${err?.stack || err}\n`);
-  process.exit(1);
+function getDbDebugInfo() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl) {
+    try {
+      const url = new URL(databaseUrl);
+      return {
+        source: "DATABASE_URL",
+        host: url.hostname || "",
+        port: Number(url.port || 3306),
+        user: decodeURIComponent(url.username || ""),
+        database: url.pathname ? url.pathname.replace(/^\//, "") : "",
+      };
+    } catch {
+      return { source: "DATABASE_URL", host: "", port: 0, user: "", database: "" };
+    }
+  }
+  return {
+    source: "DB_*",
+    host: process.env.DB_HOST || "",
+    port: Number(process.env.DB_PORT || 3306),
+    user: process.env.DB_USER || "",
+    database: process.env.DB_NAME || "",
+  };
 }
 
 function clamp(n, min, max) {
@@ -69,6 +87,17 @@ if (isProd || process.env.TRUST_PROXY) {
 
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
+
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const ms = Date.now() - startedAt;
+    process.stdout.write(
+      `[${new Date().toISOString()}] req ${req.method} ${req.originalUrl} ${res.statusCode} ${ms}ms\n`
+    );
+  });
+  next();
+});
 
 app.use(
   express.static(path.join(__dirname, "public"), {
@@ -283,6 +312,12 @@ function sanitizeFilename(name) {
 }
 
 const port = Number(process.env.PORT ?? 3000);
+{
+  const db = getDbDebugInfo();
+  process.stdout.write(
+    `[${new Date().toISOString()}] startup node=${process.version} env=${process.env.NODE_ENV || ""} port=${port} dist=${hasFrontendBuild ? "yes" : "no"} dbSource=${db.source} dbHost=${db.host} dbPort=${db.port} dbUser=${db.user} dbName=${db.database}\n`
+  );
+}
 if (hasFrontendBuild) {
   app.use(express.static(distDir, { index: false }));
   app.get("*", (req, res, next) => {
