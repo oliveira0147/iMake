@@ -4,6 +4,20 @@ import mysql from "mysql2/promise";
 let poolPromise = null;
 
 function dbConfigFromEnv() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl) {
+    const url = new URL(databaseUrl);
+    const username = decodeURIComponent(url.username || "");
+    const password = decodeURIComponent(url.password || "");
+    const database = url.pathname ? url.pathname.replace(/^\//, "") : "";
+    return {
+      host: url.hostname || "127.0.0.1",
+      port: Number(url.port || 3306),
+      user: username || "root",
+      password,
+      database: database || "imake",
+    };
+  }
   return {
     host: process.env.DB_HOST || "127.0.0.1",
     port: Number(process.env.DB_PORT || 3306),
