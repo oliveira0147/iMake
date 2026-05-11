@@ -20,16 +20,34 @@ import {
   publishTemplate,
   deleteTemplate,
 } from "./src/storage.js";
-import { createToken, requireAuth, requireAdmin } from "./src/auth.js";
+import { assertAuthConfig, createToken, requireAuth, requireAdmin } from "./src/auth.js";
 import { generateZplForTemplate } from "./src/zpl.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+process.on("unhandledRejection", (reason) => {
+  process.stderr.write(
+    `[${new Date().toISOString()}] unhandledRejection\n${reason?.stack || String(reason)}\n`
+  );
+});
+
+process.on("uncaughtException", (err) => {
+  process.stderr.write(`[${new Date().toISOString()}] uncaughtException\n${err?.stack || err}\n`);
+  process.exitCode = 1;
+});
+
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
 const distDir = path.join(__dirname, "frontend", "dist");
 const hasFrontendBuild = fs.existsSync(path.join(distDir, "index.html"));
+
+try {
+  assertAuthConfig();
+} catch (err) {
+  process.stderr.write(`[${new Date().toISOString()}] startupError\n${err?.stack || err}\n`);
+  process.exit(1);
+}
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));

@@ -5,8 +5,10 @@ const DEFAULT_DEV_SECRET = "dev-secret-change-me";
 const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_DEV_SECRET;
 const JWT_ISSUER = "imake";
 
-if (process.env.NODE_ENV === "production" && JWT_SECRET === DEFAULT_DEV_SECRET) {
-  throw new Error("JWT_SECRET não configurado para produção");
+export function assertAuthConfig() {
+  if (process.env.NODE_ENV === "production" && JWT_SECRET === DEFAULT_DEV_SECRET) {
+    throw new Error("JWT_SECRET não configurado para produção");
+  }
 }
 
 export function createToken(user) {
