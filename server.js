@@ -1,4 +1,5 @@
 import "dotenv/config";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import https from "node:https";
@@ -27,6 +28,8 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
+const distDir = path.join(__dirname, "frontend", "dist");
+const hasFrontendBuild = fs.existsSync(path.join(distDir, "index.html"));
 
 function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
@@ -38,7 +41,11 @@ function parseMm(value, fallback) {
   return clamp(n, 5, 2000);
 }
 
-if (isProd) {
+function asyncRoute(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+if (isProd || process.env.TRUST_PROXY) {
   app.set("trust proxy", 1);
 }
 
@@ -60,7 +67,7 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/qr", requireAuth, async (req, res) => {
+app.get("/api/qr", requireAuth, asyncRoute(async (req, res) => {
   const rawData = String(req.query?.data ?? "");
   const data = rawData.slice(0, 1000);
   const size = Math.max(64, Math.min(512, Math.floor(Number(req.query?.size ?? 256) || 256)));
@@ -81,9 +88,9 @@ app.get("/api/qr", requireAuth, async (req, res) => {
     .on("error", () => {
       res.status(502).json({ error: "Falha ao gerar QR" });
     });
-});
+}));
 
-app.post("/api/auth/register", async (req, res) => {
+app.post("/api/auth/register", asyncRoute(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
   const storeId = String(req.body?.storeId ?? "loja-1").trim();
@@ -109,9 +116,9 @@ app.post("/api/auth/register", async (req, res) => {
   const token = createToken(user);
   res.cookie("token", token, { httpOnly: true, sameSite: "lax", secure: isProd });
   res.json({ user: { id: user.id, email: user.email, role: user.role, storeId: user.storeId } });
-});
+}));
 
-app.post("/api/auth/login", async (req, res) => {
+app.post("/api/auth/login", asyncRoute(async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
 
@@ -129,27 +136,27 @@ app.post("/api/auth/login", async (req, res) => {
   const token = createToken(user);
   res.cookie("token", token, { httpOnly: true, sameSite: "lax", secure: isProd });
   res.json({ user: { id: user.id, email: user.email, role: user.role, storeId: user.storeId } });
-});
+}));
 
 app.post("/api/auth/logout", (req, res) => {
   res.clearCookie("token");
   res.json({ ok: true });
 });
 
-app.get("/api/me", requireAuth, async (req, res) => {
+app.get("/api/me", requireAuth, asyncRoute(async (req, res) => {
   const user = await getUserById(req.user.id);
   if (!user) {
     return res.status(401).json({ error: "Sessão inválida" });
   }
   res.json({ user: { id: user.id, email: user.email, role: user.role, storeId: user.storeId } });
-});
+}));
 
-app.get("/api/templates", requireAuth, async (req, res) => {
+app.get("/api/templates", requireAuth, asyncRoute(async (req, res) => {
   const templates = await listTemplatesForUser(req.user.id);
   res.json({ templates });
-});
+}));
 
-app.post("/api/templates", requireAuth, async (req, res) => {
+app.post("/api/templates", requireAuth, asyncRoute(async (req, res) => {
   const name = String(req.body?.name ?? "").trim() || "Novo modelo";
   const label = req.body?.label ?? {};
   const widthMm = parseMm(label.widthMm, 50);
@@ -168,17 +175,17 @@ app.post("/api/templates", requireAuth, async (req, res) => {
   });
 
   res.json({ template });
-});
+}));
 
-app.get("/api/templates/:id", requireAuth, async (req, res) => {
+app.get("/api/templates/:id", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
   const canSee = tpl.visibility === "public" || tpl.ownerId === req.user.id || req.user.role === "admin";
   if (!canSee) return res.status(403).json({ error: "Sem permissão" });
   res.json({ template: tpl });
-});
+}));
 
-app.put("/api/templates/:id", requireAuth, async (req, res) => {
+app.put("/api/templates/:id", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
   if (tpl.ownerId !== req.user.id && req.user.role !== "admin") {
@@ -198,9 +205,9 @@ app.put("/api/templates/:id", requireAuth, async (req, res) => {
     objects,
   });
   res.json({ template: updated });
-});
+}));
 
-app.delete("/api/templates/:id", requireAuth, async (req, res) => {
+app.delete("/api/templates/:id", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
   if (tpl.ownerId !== req.user.id && req.user.role !== "admin") {
@@ -208,37 +215,37 @@ app.delete("/api/templates/:id", requireAuth, async (req, res) => {
   }
   const ok = await deleteTemplate(req.params.id);
   res.json({ ok });
-});
+}));
 
-app.post("/api/templates/:id/request-publish", requireAuth, async (req, res) => {
+app.post("/api/templates/:id/request-publish", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
   if (tpl.ownerId !== req.user.id) return res.status(403).json({ error: "Sem permissão" });
   const updated = await requestPublishTemplate(req.params.id);
   res.json({ template: updated });
-});
+}));
 
-app.get("/api/admin/pending-publish", requireAuth, requireAdmin, async (_req, res) => {
+app.get("/api/admin/pending-publish", requireAuth, requireAdmin, asyncRoute(async (_req, res) => {
   const pending = await listPendingPublishTemplates();
   res.json({ templates: pending });
-});
+}));
 
-app.post("/api/admin/templates/:id/publish", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/templates/:id/publish", requireAuth, requireAdmin, asyncRoute(async (req, res) => {
   const updated = await publishTemplate(req.params.id);
   if (!updated) return res.status(404).json({ error: "Modelo não encontrado" });
   res.json({ template: updated });
-});
+}));
 
-app.get("/api/templates/:id/zpl", requireAuth, async (req, res) => {
+app.get("/api/templates/:id/zpl", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).json({ error: "Modelo não encontrado" });
   const canSee = tpl.visibility === "public" || tpl.ownerId === req.user.id || req.user.role === "admin";
   if (!canSee) return res.status(403).json({ error: "Sem permissão" });
   const zpl = generateZplForTemplate(tpl);
   res.json({ zpl });
-});
+}));
 
-app.get("/api/templates/:id/export.zpl", requireAuth, async (req, res) => {
+app.get("/api/templates/:id/export.zpl", requireAuth, asyncRoute(async (req, res) => {
   const tpl = await getTemplateById(req.params.id);
   if (!tpl) return res.status(404).send("Modelo não encontrado");
   const canSee = tpl.visibility === "public" || tpl.ownerId === req.user.id || req.user.role === "admin";
@@ -247,7 +254,7 @@ app.get("/api/templates/:id/export.zpl", requireAuth, async (req, res) => {
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="${sanitizeFilename(tpl.name)}.zpl"`);
   res.send(zpl);
-});
+}));
 
 function sanitizeFilename(name) {
   return String(name)
@@ -258,14 +265,25 @@ function sanitizeFilename(name) {
 }
 
 const port = Number(process.env.PORT ?? 3000);
-if (isProd) {
-  const distDir = path.join(__dirname, "frontend", "dist");
+if (hasFrontendBuild) {
   app.use(express.static(distDir, { index: false }));
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
     res.sendFile(path.join(distDir, "index.html"));
   });
 }
+
+app.use((err, req, res, _next) => {
+  const requestId = nanoid(10);
+  process.stderr.write(
+    `[${new Date().toISOString()}] error requestId=${requestId} ${req.method} ${req.originalUrl}\n${err?.stack || err}\n`
+  );
+  if (req.path.startsWith("/api/")) {
+    res.status(500).json({ error: "Erro interno", requestId });
+    return;
+  }
+  res.status(500).send("Erro interno");
+});
 
 app.listen(port, "0.0.0.0", () => {
   process.stdout.write(`Listening on port ${port}\n`);
