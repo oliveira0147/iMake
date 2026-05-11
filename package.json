@@ -2,7 +2,7 @@
   "name": "imake",
   "version": "0.1.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "engines": {
     "node": ">=18"
   },
@@ -12,8 +12,8 @@
     "dev:api": "node server.js",
     "dev:web": "vite --config frontend/vite.config.js",
     "build": "vite build --config frontend/vite.config.js",
-    "agent": "node print-agent.js",
-    "build:agent": "node tools/build-agent-icon.cjs && node -e \"import('node:fs').then(fs=>{fs.mkdirSync('build',{recursive:true});fs.mkdirSync('release',{recursive:true});})\" && node node_modules/esbuild/bin/esbuild print-agent.js --bundle --platform=node --format=cjs --outfile=build/print-agent.cjs && node node_modules/pkg/lib-es5/bin.js build/print-agent.cjs --targets node18-win-x64 --output release/IMakePrintAgent.exe"
+    "agent": "node print-agent.mjs",
+    "build:agent": "node tools/build-agent-icon.cjs && node -e \"import('node:fs').then(fs=>{fs.mkdirSync('build',{recursive:true});fs.mkdirSync('release',{recursive:true});})\" && node node_modules/esbuild/bin/esbuild print-agent.mjs --bundle --platform=node --format=cjs --outfile=build/print-agent.cjs && node node_modules/pkg/lib-es5/bin.js build/print-agent.cjs --targets node18-win-x64 --output release/IMakePrintAgent.exe"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
